@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mr Fishy Slides</title>
+<style>
+  body { margin: 0; font-family: Arial, sans-serif; background: #f0f0f0; }
+  .hidden { display: none; }
+
+  /* HOME PAGE */
+  .home { padding: 40px; }
+  .home h1 { margin-bottom: 20px; }
+  .deck-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
+  }
+  .deck {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    cursor: pointer;
+    position: relative;
+  }
+  .delete-deck {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #e53935;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  /* EDITOR */
+  .toolbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    z-index: 1000;
+    box-sizing: border-box;
+  }
+  .toolbar-left, .toolbar-center, .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .slide {
+    display: none;
+    width: 100vw;
+    height: calc(100vh - 70px);
+    padding: 50px;
+    box-sizing: border-box;
+    margin-top: 70px;
+  }
+  .slide.active {
+    display: block;
+    background: white;
+    box-shadow: 0 0 20px rgba(0,0,0,0.2);
+    border: 4px solid red;
+  }
+  button, select, input {
+    padding: 8px 14px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .slide[contenteditable] { outline: 2px dashed #ccc; }
+  img { max-width: 100%; display: block; resize: both; overflow: auto; }
+</style>
+</head>
+<body>
+
+<!-- HOME PAGE -->
+<div class="home" id="home">
+  <h1>Mr Fishy Slides</h1>
+  <button id="newDeckBtn">➕ New Presentation</button>
+  <h2>Your Slides</h2>
+  <div class="deck-list" id="deckList"></div>
+</div>
+
+<!-- EDITOR -->
+<div id="editor" class="hidden">
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <input id="deckNameInput" type="text" placeholder="Presentation name">
+      <button id="homeBtn">🏠 Home</button>
+      <button id="prevBtn">Previous</button>
+      <button id="nextBtn">Next</button>
+    </div>
+    <div class="toolbar-center">
+      <select id="fontSelect">
+        <option value="Arial">Arial</option>
+        <option value="Georgia">Georgia</option>
+        <option value="Times New Roman">Times New Roman</option>
+        <option value="Verdana">Verdana</option>
+      </select>
+      <select id="fontSizeSelect">
+        <option value="16px">16</option>
+        <option value="20px">20</option>
+        <option value="24px">24</option>
+        <option value="32px">32</option>
+      </select>
+      <select id="imageSizeSelect">
+        <option value="100%">100%</option>
+        <option value="75%">75%</option>
+        <option value="50%">50%</option>
+        <option value="25%">25%</option>
+      </select>
+      <input type="color" id="textColorPicker" title="Text color">
+      <input type="color" id="bgColorPicker" title="Text box background">
+      <button id="addTextBtn">Add Text</button>
+      <button id="addSlideBtn">Add Slide</button>
+    </div>
+    <div class="toolbar-right">
+      <span id="autosaveIndicator" style="font-size:12px;">Saved</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================
+   STATE & ELEMENTS
+===================== */
+const STORAGE_KEY = 'mrFishyDecks';
+let decks = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+let currentDeck = null;
+let slides = [];
+let currentSlide = 0;
+
+const home = document.getElementById('home');
+const editor = document.getElementById('editor');
+const deckList = document.getElementById('deckList');
+
+const newDeckBtn = document.getElementById('newDeckBtn');
+const homeBtn = document.getElementById('homeBtn');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const addSlideBtn = document.getElementById('addSlideBtn');
+
+const fontSelect = document.getElementById('fontSelect');
+const fontSizeSelect = document.getElementById('fontSizeSelect');
+const imageSizeSelect = document.getElementById('imageSizeSelect');
+const addTextBtn = document.getElementById('addTextBtn');
+const textColorPicker = document.getElementById('textColorPicker');
+const bgColorPicker = document.getElementById('bgColorPicker');
+
+/* =====================
+   HOME PAGE
+===================== */
+function saveDecks() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(decks));
+}
+
+function renderHome() {
+  deckList.innerHTML = '';
+  decks.forEach((deck, index) => {
+    const div = document.createElement('div');
+    div.className = 'deck';
+
+    const title = document.createElement('div');
+    title.textContent = deck.name;
+    title.onclick = () => openDeck(index);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'delete-deck';
+    delBtn.textContent = 'Delete';
+    delBtn.onclick = (e) => {
+      e.stopPropagation();
+      decks.splice(index, 1);
+      saveDecks();
+      renderHome();
+    };
+
+    div.appendChild(title);
+    div.appendChild(delBtn);
+    deckList.appendChild(div);
+  });
+}
+
+function newDeck() {
+  const deck = { name: 'Untitled Slides', slides: ['<h1>Slide 1</h1>'] };
+  decks.push(deck);
+  saveDecks();
+  openDeck(decks.length - 1);
+}
+
+/* =====================
+   EDITOR
+===================== */
+function openDeck(index) {
+  currentDeck = index;
+  home.classList.add('hidden');
+  editor.classList.remove('hidden');
+  document.getElementById('deckNameInput').value = decks[currentDeck].name;
+  loadSlides();
+}
+
+function loadSlides() {
+  document.querySelectorAll('.slide').forEach(s => s.remove());
+  slides = [];
+  decks[currentDeck].slides.forEach((html, i) => {
+    const slide = document.createElement('div');
+    slide.className = 'slide' + (i === 0 ? ' active' : '');
+    slide.contentEditable = true;
+    slide.innerHTML = html;
+    slide.addEventListener('input', autoSave);
+    document.body.appendChild(slide);
+    slides.push(slide);
+  });
+  currentSlide = 0;
+}
+
+function autoSave() {
+  if (currentDeck === null) return;
+  const indicator = document.getElementById('autosaveIndicator');
+  indicator.textContent = 'Saving...';
+
+  decks[currentDeck].slides = slides.map(s => s.innerHTML);
+  decks[currentDeck].name = document.getElementById('deckNameInput').value || 'Untitled Slides';
+  saveDecks();
+
+  setTimeout(() => indicator.textContent = 'Saved', 300);
+}
+
+/* =====================
+   CONTROLS
+===================== */
+fontSelect.onchange = () => {
+  const slide = slides[currentSlide];
+  if (!slide) return;
+  slide.style.fontFamily = fontSelect.value;
+  autoSave();
+};
+
+fontSizeSelect.onchange = () => {
+  const slide = slides[currentSlide];
+  if (!slide) return;
+  slide.style.fontSize = fontSizeSelect.value;
+  autoSave();
+};
+
+imageSizeSelect.onchange = () => {
+  const slide = slides[currentSlide];
+  if (!slide) return;
+  slide.querySelectorAll('img').forEach(img => img.style.width = imageSizeSelect.value);
+  autoSave();
+};
+
+textColorPicker.oninput = () => {
+  const slide = slides[currentSlide];
+  if (!slide) return;
+  slide.style.color = textColorPicker.value;
+  autoSave();
+};
+
+bgColorPicker.oninput = () => {
+  const slide = slides[currentSlide];
+  if (!slide) return;
+  slide.style.backgroundColor = bgColorPicker.value;
+  autoSave();
+};
+
+addTextBtn.onclick = () => {
+  const slide = slides[currentSlide];
+  if (!slide) return;
+  const p = document.createElement('p');
+  p.textContent = 'New text';
+  p.contentEditable = true;
+  slide.appendChild(p);
+  autoSave();
+};
+
+addSlideBtn.onclick = () => {
+  const slide = document.createElement('div');
+  slide.className = 'slide active';
+  slide.contentEditable = true;
+  slide.innerHTML = '<h1>New Slide</h1>';
+  slide.addEventListener('input', autoSave);
+  document.body.appendChild(slide);
+
+  slides.forEach(s => s.classList.remove('active'));
+  slides.push(slide);
+  currentSlide = slides.length - 1;
+  autoSave();
+};
+
+prevBtn.onclick = () => {
+  if (!slides.length) return;
+  currentSlide = (currentSlide - 1 + slides.length) % slides.length;
+  slides.forEach((s,i)=>s.classList.toggle('active', i === currentSlide));
+};
+
+nextBtn.onclick = () => {
+  if (!slides.length) return;
+  currentSlide = (currentSlide + 1) % slides.length;
+  slides.forEach((s,i)=>s.classList.toggle('active', i === currentSlide));
+};
+
+homeBtn.onclick = () => {
+  editor.classList.add('hidden');
+  home.classList.remove('hidden');
+  renderHome();
+};
+
+newDeckBtn.onclick = newDeck;
+
+/* =====================
+   BASIC TESTS
+===================== */
+console.assert(typeof renderHome === 'function', 'renderHome should exist');
+console.assert(Array.isArray(decks), 'decks should be an array');
+
+renderHome();
+</script>
+</body>
+</html>
